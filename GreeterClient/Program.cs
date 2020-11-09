@@ -1,38 +1,40 @@
-// Copyright 2015 gRPC authors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 using System;
+using CertificateUtil;
 using Grpc.Core;
 using Helloworld;
 
 namespace GreeterClient
 {
-    class Program
-    {
-        public static void Main(string[] args)
-        {
-            Channel channel = new Channel("127.0.0.1:30051", ChannelCredentials.Insecure);
+	internal class Program
+	{
+		public static void Main(string[] args)
+		{
+			if (args.Length != 2)
+			{
+				Console.WriteLine("Usage:");
+				Console.WriteLine("<hostname> <port>");
+				return;
+			}
 
-            var client = new Greeter.GreeterClient(channel);
-            String user = "you";
+			var host = args[0];
+			var port = Convert.ToInt32(args[1]);
 
-            var reply = client.SayHello(new HelloRequest { Name = user });
-            Console.WriteLine("Greeting: " + reply.Message);
+			var rootCertificatesAsPem =
+				CertificateUtils.GetUserRootCertificatesInPemFormat();
 
-            channel.ShutdownAsync().Wait();
-            Console.WriteLine("Press any key to exit...");
-            Console.ReadKey();
-        }
-    }
+			var credentials = new SslCredentials(rootCertificatesAsPem);
+
+			var channel = new Channel(host, port, credentials);
+
+			var client = new Greeter.GreeterClient(channel);
+			var user = Environment.UserName;
+
+			var reply = client.SayHello(new HelloRequest {Name = user});
+			Console.WriteLine("Greeting: " + reply.Message);
+
+			channel.ShutdownAsync().Wait();
+			Console.WriteLine("Press any key to exit...");
+			Console.ReadKey();
+		}
+	}
 }
