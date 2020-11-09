@@ -22,10 +22,10 @@ namespace GreeterServer
 	{
 		public static void Main(string[] args)
 		{
-			if (args.Length != 3)
+			if (args.Length < 3)
 			{
 				Console.WriteLine("Usage:");
-				Console.WriteLine("<hostname> <port> <Thumbprint of server certificate>");
+				Console.WriteLine("<hostname> <port> <Thumbprint of server certificate> {--request_client_cert}");
 				return;
 			}
 
@@ -34,7 +34,11 @@ namespace GreeterServer
 			var port = Convert.ToInt32(args[1]);
 			var certificateThumbprint = args[2];
 
-			var serverCredentials = GetServerCredentials(certificateThumbprint);
+			bool enforceMutualTls =
+				args.Length == 4
+				&& args[3].Equals("--request_client_cert", StringComparison.InvariantCultureIgnoreCase);
+
+			var serverCredentials = GetServerCredentials(certificateThumbprint, enforceMutualTls);
 
 			var server = new Server
 			{
@@ -91,7 +95,7 @@ namespace GreeterServer
 			var clientCertificates =
 				enforceMutualTls
 					? SslClientCertificateRequestType.RequestAndRequireAndVerify
-					: SslClientCertificateRequestType.RequestAndVerify;
+					: SslClientCertificateRequestType.DontRequest;
 
 			ServerCredentials result = new SslServerCredentials(
 				keyCertificatePairs, rootCertificatesAsPem,

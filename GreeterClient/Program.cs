@@ -1,4 +1,5 @@
 using System;
+using System.Security.Cryptography.X509Certificates;
 using CertificateUtil;
 using Grpc.Core;
 using Helloworld;
@@ -9,20 +10,33 @@ namespace GreeterClient
 	{
 		public static void Main(string[] args)
 		{
-			if (args.Length != 2)
+			if (args.Length < 2)
 			{
 				Console.WriteLine("Usage:");
-				Console.WriteLine("<hostname> <port>");
+				Console.WriteLine("<hostname> <port> {Thumbprint of client certificate>");
 				return;
 			}
 
 			var host = args[0];
 			var port = Convert.ToInt32(args[1]);
 
+			string clientCertificate = null;
+			if (args.Length == 3)
+			{
+				clientCertificate = args[2];
+			}
+
 			var rootCertificatesAsPem =
 				CertificateUtils.GetUserRootCertificatesInPemFormat();
 
-			var credentials = new SslCredentials(rootCertificatesAsPem);
+			KeyCertificatePair sslClientCertificate = null;
+			if (clientCertificate != null)
+			{
+				sslClientCertificate = GetClientCertificate(clientCertificate);
+			}
+
+			var credentials = new SslCredentials(rootCertificatesAsPem, sslClientCertificate);
+
 
 			var channel = new Channel(host, port, credentials);
 
@@ -35,6 +49,31 @@ namespace GreeterClient
 			channel.ShutdownAsync().Wait();
 			Console.WriteLine("Press any key to exit...");
 			Console.ReadKey();
+		}
+
+		private static KeyCertificatePair GetClientCertificate(string thumbPrint)
+		{
+			KeyCertificatePair sslClientCertificate;
+			var keyPair = CertificateUtils.FindKeyCertificatePairFromStore(
+				thumbPrint, new[]
+				{
+					X509FindType.FindByThumbprint
+				}, StoreName.My, StoreLocation.CurrentUser);
+
+			if (keyPair != null)
+			{
+				Console.WriteLine("Using client-side certificate");
+
+				sslClientCertificate =
+					new KeyCertificatePair(keyPair.PublicKey, keyPair.PrivateKey);
+			}
+			else
+			{
+				throw new ArgumentException(
+					$"Could not usable find client certificate {thumbPrint} in certificate store.");
+			}
+
+			return sslClientCertificate;
 		}
 	}
 }
