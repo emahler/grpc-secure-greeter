@@ -20,12 +20,17 @@ namespace GreeterServer
 
 	internal class Program
 	{
+		private const string InsecureArg = "INSECURE";
+
 		public static void Main(string[] args)
 		{
 			if (args.Length < 3)
 			{
 				Console.WriteLine("Usage:");
 				Console.WriteLine("<hostname> <port> <Thumbprint of server certificate> {--request_client_cert}");
+				Console.WriteLine();
+				Console.WriteLine("Usage for insecure communication:");
+				Console.WriteLine($"<hostname> <port> {InsecureArg}");
 				return;
 			}
 
@@ -34,11 +39,20 @@ namespace GreeterServer
 			var port = Convert.ToInt32(args[1]);
 			var certificateThumbprint = args[2];
 
-			bool enforceMutualTls =
-				args.Length == 4
-				&& args[3].Equals("--request_client_cert", StringComparison.InvariantCultureIgnoreCase);
+			ServerCredentials serverCredentials;
 
-			var serverCredentials = GetServerCredentials(certificateThumbprint, enforceMutualTls);
+			if (certificateThumbprint.Equals("INSECURE", StringComparison.InvariantCultureIgnoreCase))
+			{
+				serverCredentials = ServerCredentials.Insecure;
+			}
+			else
+			{
+				bool enforceMutualTls =
+					args.Length == 4
+					&& args[3].Equals("--request_client_cert", StringComparison.InvariantCultureIgnoreCase);
+
+				serverCredentials = GetServerCredentials(certificateThumbprint, enforceMutualTls);
+			}
 
 			var server = new Server
 			{

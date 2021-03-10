@@ -8,12 +8,17 @@ namespace GreeterClient
 {
 	internal class Program
 	{
+		private const string InsecureArg = "INSECURE";
+
 		public static void Main(string[] args)
 		{
 			if (args.Length < 2)
 			{
 				Console.WriteLine("Usage:");
-				Console.WriteLine("<hostname> <port> {Thumbprint of client certificate>");
+				Console.WriteLine("<hostname> <port> {Thumbprint of client certificate}");
+				Console.WriteLine();
+				Console.WriteLine("Usage for insecure communication:");
+				Console.WriteLine($"<hostname> <port> {InsecureArg}");
 				return;
 			}
 
@@ -26,17 +31,17 @@ namespace GreeterClient
 				clientCertificate = args[2];
 			}
 
-			var rootCertificatesAsPem =
-				CertificateUtils.GetUserRootCertificatesInPemFormat();
-
-			KeyCertificatePair sslClientCertificate = null;
-			if (clientCertificate != null)
+			ChannelCredentials credentials;
+			
+			if (clientCertificate != null &&
+			    clientCertificate.Equals(InsecureArg, StringComparison.InvariantCultureIgnoreCase))
 			{
-				sslClientCertificate = GetClientCertificate(clientCertificate);
+				credentials = ChannelCredentials.Insecure;
 			}
-
-			var credentials = new SslCredentials(rootCertificatesAsPem, sslClientCertificate);
-
+			else
+			{
+				credentials = GetSslCredentials(clientCertificate);
+			}
 
 			var channel = new Channel(host, port, credentials);
 
@@ -49,6 +54,21 @@ namespace GreeterClient
 			channel.ShutdownAsync().Wait();
 			Console.WriteLine("Press any key to exit...");
 			Console.ReadKey();
+		}
+
+		private static SslCredentials GetSslCredentials(string clientCertificate)
+		{
+			var rootCertificatesAsPem =
+				CertificateUtils.GetUserRootCertificatesInPemFormat();
+
+			KeyCertificatePair sslClientCertificate = null;
+			if (clientCertificate != null)
+			{
+				sslClientCertificate = GetClientCertificate(clientCertificate);
+			}
+
+			var credentials = new SslCredentials(rootCertificatesAsPem, sslClientCertificate);
+			return credentials;
 		}
 
 		private static KeyCertificatePair GetClientCertificate(string thumbPrint)
