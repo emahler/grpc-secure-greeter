@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using CertificateUtil;
 using Grpc.Core;
@@ -16,6 +17,8 @@ namespace GreeterClient
 			{
 				Console.WriteLine("Usage:");
 				Console.WriteLine("<hostname> <port> {Thumbprint of client certificate}");
+				Console.WriteLine(
+					"<hostname> <port> <PEM encoded file containing the server root certificates (public key)>");
 				Console.WriteLine();
 				Console.WriteLine("Usage for insecure communication:");
 				Console.WriteLine($"<hostname> <port> {InsecureArg}");
@@ -25,22 +28,29 @@ namespace GreeterClient
 			var host = args[0];
 			var port = Convert.ToInt32(args[1]);
 
-			string clientCertificate = null;
+			string certificate = null;
 			if (args.Length == 3)
 			{
-				clientCertificate = args[2];
+				certificate = args[2];
 			}
 
 			ChannelCredentials credentials;
 			
-			if (clientCertificate != null &&
-			    clientCertificate.Equals(InsecureArg, StringComparison.InvariantCultureIgnoreCase))
+			if (certificate != null &&
+			    certificate.Equals(InsecureArg, StringComparison.InvariantCultureIgnoreCase))
 			{
 				credentials = ChannelCredentials.Insecure;
 			}
+			else if (File.Exists(certificate))
+			{
+				Console.WriteLine("Using certificate from files... ");
+
+				string serverCertificate = File.ReadAllText(certificate);
+				credentials = new SslCredentials(serverCertificate);
+			}
 			else
 			{
-				credentials = GetSslCredentials(clientCertificate);
+				credentials = GetSslCredentials(certificate);
 			}
 
 			var channel = new Channel(host, port, credentials);

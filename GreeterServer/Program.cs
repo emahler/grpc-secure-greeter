@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using CertificateUtil;
@@ -26,32 +27,44 @@ namespace GreeterServer
 		{
 			if (args.Length < 3)
 			{
-				Console.WriteLine("Usage:");
-				Console.WriteLine("<hostname> <port> <Thumbprint of server certificate> {--request_client_cert}");
-				Console.WriteLine();
-				Console.WriteLine("Usage for insecure communication:");
-				Console.WriteLine($"<hostname> <port> {InsecureArg}");
+				PrintUsage();
 				return;
 			}
 
 			// NOTE: Localhost won't work if the SAN in the certificate is <machine name>.<domain name>.com
 			var host = args[0];
 			var port = Convert.ToInt32(args[1]);
-			var certificateThumbprint = args[2];
+			var certificate = args[2];
 
 			ServerCredentials serverCredentials;
 
-			if (certificateThumbprint.Equals("INSECURE", StringComparison.InvariantCultureIgnoreCase))
+			if (certificate.Equals("INSECURE", StringComparison.InvariantCultureIgnoreCase))
 			{
 				serverCredentials = ServerCredentials.Insecure;
 			}
+			else if (File.Exists(certificate))
+			{
+				Console.WriteLine("Using certificate from files... ");
+
+				if (args.Length < 4)
+				{
+					Console.WriteLine("No private key file specified.");
+					PrintUsage();
+				}
+
+				string privateKeyFile = args[3];
+
+				serverCredentials = GetServerCredentials(certificate, privateKeyFile);
+			}
 			else
 			{
+				Console.WriteLine("Getting certificate from certificate store... ");
+
 				bool enforceMutualTls =
 					args.Length == 4
 					&& args[3].Equals("--request_client_cert", StringComparison.InvariantCultureIgnoreCase);
 
-				serverCredentials = GetServerCredentials(certificateThumbprint, enforceMutualTls);
+				serverCredentials = GetServerCredentials(certificate, enforceMutualTls);
 			}
 
 			var server = new Server
@@ -68,10 +81,24 @@ namespace GreeterServer
 			server.ShutdownAsync().Wait();
 		}
 
+		/// <summary>
+		/// Creates the server credentials using two PEM files.
+		/// </summary>
+		/// <param name="certificateFile"></param>
+		/// <param name="privateKeyFile"></param>
+		/// <returns></returns>
+		private static ServerCredentials GetServerCredentials(string certificateFile, 
+			string privateKeyFile)
+		{
+			var keyPair = new KeyPair(File.ReadAllText(privateKeyFile),
+				File.ReadAllText(certificateFile));
+
+			return GetServerCredentials(keyPair, false);
+		}
+
 
 		/// <summary>
-		///     Creates the server credentials using either two PEM files or a certificate from the
-		///     Certificate Store.
+		/// Creates the server credentials using a certificate from the Certificate Store.
 		/// </summary>
 		/// <param name="certificate">
 		///     The certificate store's certificate (subject or thumbprint)
@@ -93,8 +120,16 @@ namespace GreeterServer
 			var certificateKeyPair =
 				TryGetServerCertificateKeyPair(certificate);
 
-			if (certificateKeyPair == null) return ServerCredentials.Insecure;
+			if (certificateKeyPair == null)
+			{
+				return ServerCredentials.Insecure;
+			}
 
+			return GetServerCredentials(certificateKeyPair, enforceMutualTls);
+		}
+
+		private static ServerCredentials GetServerCredentials(KeyPair certificateKeyPair, bool enforceMutualTls)
+		{
 			var keyCertificatePairs =
 				new List<KeyCertificatePair>
 				{
@@ -122,16 +157,13 @@ namespace GreeterServer
 		private static KeyPair TryGetServerCertificateKeyPair(
 			string certificate)
 		{
-			KeyPair result;
-
 			// Find server certificate from Store (Local Computer, Personal folder)
-			result =
-				CertificateUtils.FindKeyCertificatePairFromStore(
-					certificate,
-					new[]
-					{
-						X509FindType.FindByThumbprint
-					}, StoreName.My, StoreLocation.LocalMachine);
+			var result = CertificateUtils.FindKeyCertificatePairFromStore(
+				certificate,
+				new[]
+				{
+					X509FindType.FindByThumbprint
+				}, StoreName.My, StoreLocation.LocalMachine);
 
 			if (result == null)
 				Console.WriteLine(
@@ -141,6 +173,16 @@ namespace GreeterServer
 				Console.WriteLine("Using certificate from certificate store for TLS.");
 
 			return result;
+		}
+
+		private static void PrintUsage()
+		{
+			Console.WriteLine("Usage:");
+			Console.WriteLine("<hostname> <port> <Thumbprint of server certificate> {--request_client_cert}");
+			Console.WriteLine("<hostname> <port> <Certificate (public key) as PEM file> <Private key PEM file>");
+			Console.WriteLine();
+			Console.WriteLine("Usage for insecure communication:");
+			Console.WriteLine($"<hostname> <port> {InsecureArg}");
 		}
 	}
 }

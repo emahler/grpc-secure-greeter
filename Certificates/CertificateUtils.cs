@@ -99,7 +99,10 @@ namespace CertificateUtil
 
 				var keyPair = GetCertificatePair(foundCertificates);
 
-				if (keyPair != null) return keyPair;
+				if (keyPair != null)
+				{
+					return keyPair;
+				}
 			}
 
 			return null;
@@ -189,7 +192,10 @@ namespace CertificateUtil
 			{
 				var certificateKeyPair = TryExtractKeyPair(certificate);
 
-				if (certificateKeyPair != null) return certificateKeyPair;
+				if (certificateKeyPair != null)
+				{
+					return certificateKeyPair;
+				}
 			}
 
 			return null;
